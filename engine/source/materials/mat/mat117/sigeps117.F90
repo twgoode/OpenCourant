@@ -58,6 +58,13 @@
 !----------------------------------------------------------------
         implicit none
 #include  "units_c.inc"
+      ! 2026-09-28 (twgoode): Coulomb friction on the failed, closed interface
+      ! (with Idel > 4 the failed points stay: dmg = 1, zero tension/shear).
+      ! mu is read once from the environment variable RAD_COH_MU (default 0).
+      real(kind=WP), save :: mu_fric = -1.0_WP
+      character(len=32) :: envbuf
+      integer :: envlen, envstat, ifr
+      real(kind=WP) :: tzx, tyz, tnrm, tcap
 !----------------------------------------------------------------
 !  I n p u t   A r g u m e n t s
 !----------------------------------------------------------------
@@ -119,6 +126,12 @@
       !< Recovering real model parameters
       e_elas_n    = matparam%uparam(1)   ! normal elastic stiffness (en)
       e_elas_s    = matparam%uparam(2)   ! tangential elastic stiffness (et)
+      if (mu_fric < zero) then
+        mu_fric = zero
+        call get_environment_variable('RAD_COH_MU', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) mu_fric
+        write(iout,'(A,1PE12.4)') '  LAW117 patch: friction on failed closed points, mu =', mu_fric
+      endif
       gama        = matparam%uparam(3)   ! mode coupling parameter (gamma)
       t_n         = matparam%uparam(4)   ! normal stress (tn)
       t_s         = matparam%uparam(5)   ! tangential shear stress (tt)
@@ -401,6 +414,31 @@
       endif
       signyz(1:nel) = (one-dmg(1:nel))*e_elas_s*epsyz(1:nel)
       signzx(1:nel) = (one-dmg(1:nel))*e_elas_s*epszx(1:nel)
+      ! failed points kept by Idel > 4: Coulomb friction when closed (stick with the
+      ! intact shear stiffness on the slip increment, cap mu*|normal traction|),
+      ! zero shear when open.  The slip work enters IE through these stresses,
+      ! so the energy balance stays exact.
+      if (nfail > 4 .and. mu_fric > zero) then
+        do ifr = 1, nel
+          if (dmg(ifr) >= one) then
+            if (epszz(ifr) < zero) then
+              tzx  = uvar(ifr,2) + e_elas_s*depszx(ifr)
+              tyz  = uvar(ifr,3) + e_elas_s*depsyz(ifr)
+              tcap = mu_fric*abs(signzz(ifr))
+              tnrm = sqrt(tzx*tzx + tyz*tyz)
+              if (tnrm > tcap .and. tnrm > zero) then
+                tzx = tzx*tcap/tnrm
+                tyz = tyz*tcap/tnrm
+              endif
+              signzx(ifr) = tzx
+              signyz(ifr) = tyz
+            else
+              signzx(ifr) = zero
+              signyz(ifr) = zero
+            endif
+          endif
+        enddo
+      endif
 !
       ! if (icrittyp == 2) then
       !   ! smooth c^1 fade-out near deletion (energy-based criterion)
