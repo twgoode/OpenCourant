@@ -118,6 +118,9 @@ C         coef= (3*0.8)^2 , FZ=0.5*0.95^2
      .   A1(MVSIZ), A2(MVSIZ), A3(MVSIZ),F_MAX,
      .   FACZM
       DATA F_Z/.45/,COEF/5.76/,COEFH/0.5/,F_MAX/0.998/
+C     hgfix declarations
+      INTEGER K
+      my_real FHOLD(MVSIZ,11), DFH(11), EZ3T, EHGC
 C-----------------------------------------------
 C        OPEN(UNIT=12,FILE='DEBHC.TMP',STATUS='UNKNOWN',FORM='FORMATTED')
 C  ----: r->ksi; s->eta; t->zeta------------
@@ -239,6 +242,12 @@ c      ENDIF
         A2(I) =NU(I)
         A3(I) = ONE
        ENDDO 
+C     hgfix: old hourglass stresses for the mid-step energy booking
+      DO I=1,NEL
+        DO K=1,11
+          FHOLD(I,K) = OFF(I)*FHOUR(I,K)
+        ENDDO
+      ENDDO
       !-------elstic increament, attention il y a un fac=1/3----
       DO I=1,NEL
        C11 = TWO*G_3DT(I)/(ONE-NU(I))
@@ -462,6 +471,36 @@ C
      .   NFHX3(I)*HGX3(I) + NFHX4(I)*HGX4(I) + 
      .   NFHY3(I)*HGY3(I) + NFHY4(I)*HGY4(I) ) 
      .   /MAX(EM20,VOL0(I)) +EINTM(I)
+      ENDDO
+C     hgfix: book the elastic hourglass stresses at mid-step,
+C     0.5*(FHOUR_old+FHOUR_new): subtract 0.5*DT1*E(dFHOUR).HG
+      DO I=1,NEL
+        DO K=1,11
+          DFH(K) = FHOUR(I,K) - FHOLD(I,K)
+        ENDDO
+        IF (NLAY .LE. 1) THEN
+          DFH(9)  = ZERO
+          DFH(10) = ZERO
+        ENDIF
+        CC   = THK_1(I)*VOL(I)
+        RX1  = SX0(I)*SX0(I)/RX0(I)+RX0(I)
+        RXY1 = SX0(I)*SY0(I)/RX0(I)+RY0(I)
+        SY1  = RY0(I)*RY0(I)/SY0(I)+SY0(I)
+        EZ3T = VOL(I)*(SY1*DFH(8)+RX1*DFH(7)
+     .                +SY0(I)*DFH(1)+RX0(I)*DFH(3))
+        SY1  = SY1*A1(I)
+        RX1  = RX1*A1(I)
+        RXY1 = RXY1*A2(I)
+        SYX1 = RXY1*RX0(I)/SY0(I)
+        VOL_3 = THIRD*VOL(I)
+        EHGC = CC*(DFH(1)+DFH(8))*HGX1(I) + CC*DFH(2)*HGZ1(I)
+     .       + CC*(DFH(3)+DFH(7))*HGY2(I) + CC*DFH(4)*HGZ2(I)
+     .       + EZ3T*HGZ3(I) + THK_1(I)*VOL_3*DFH(11)*HGZ4(I)
+     .       + VOL(I)*(SY1*DFH(5)+RXY1*DFH(6))*HGX3(I)
+     .       + VOL(I)*(RX1*DFH(6)+SYX1*DFH(5))*HGY3(I)
+     .       + VOL_3*(SY1*DFH(9)+RXY1*DFH(10))*HGX4(I)
+     .       + VOL_3*(RX1*DFH(10)+SYX1*DFH(9))*HGY4(I)
+        EINT(I) = EINT(I) - HALF*DT1*EHGC/MAX(EM20,VOL0(I))
       ENDDO
 C
       RETURN
