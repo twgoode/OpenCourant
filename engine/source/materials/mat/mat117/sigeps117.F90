@@ -72,6 +72,7 @@
       ! 2026-10-05 (twgoode): phase switch of the interface card (RAD_COH_TSW, see below)
       real(kind=WP), save :: tsw_sw = -2.0_WP, tn_sw = -1.0_WP, tt_sw = -1.0_WP,       &
                              gic_sw = -1.0_WP, giic_sw = -1.0_WP
+      real(kind=WP), save :: eta_sw = -1.0_WP   ! 2026-10-14: RAD_COH_ETA2
 !----------------------------------------------------------------
 !  I n p u t   A r g u m e n t s
 !----------------------------------------------------------------
@@ -166,9 +167,12 @@
         if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) gic_sw
         call get_environment_variable('RAD_COH_GIIC2', envbuf, envlen, envstat)
         if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) giic_sw
+        call get_environment_variable('RAD_COH_ETA2', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) eta_sw
         if (tsw_sw >= zero) then
           write(iout,'(A,1PE12.4,A,4(1PE12.4))') '  LAW117 patch: phase switch at t =', tsw_sw, &
             '  TN2 TT2 GIC2 GIIC2 =', tn_sw, tt_sw, gic_sw, giic_sw
+          write(iout,'(A,1PE12.4)') '  LAW117 patch: phase switch ETA2 (BK exponent) =', eta_sw
           if (ievoshap /= 1) write(iout,'(A)') '  LAW117 patch: phase switch needs ievoshap = 1; NOT applied'
         endif
       endif
@@ -177,6 +181,7 @@
         if (tt_sw > zero)   t_s  = tt_sw
         if (gic_sw > zero)  gic  = gic_sw
         if (giic_sw > zero) giic = giic_sw
+        if (eta_sw > zero)  exp_bk = eta_sw
         delta0n_cst = t_n / e_elas_n
         delta0s_cst = t_s / e_elas_s
         und_cst     = two * gic  / t_n
