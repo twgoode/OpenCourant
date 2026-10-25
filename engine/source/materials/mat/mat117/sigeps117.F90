@@ -69,6 +69,9 @@
       character(len=32) :: envbuf
       integer :: envlen, envstat, ifr
       real(kind=WP) :: tzx, tyz, tnrm, tcap
+      ! 2026-10-05 (twgoode): phase switch of the interface card (RAD_COH_TSW, see below)
+      real(kind=WP), save :: tsw_sw = -2.0_WP, tn_sw = -1.0_WP, tt_sw = -1.0_WP,       &
+                             gic_sw = -1.0_WP, giic_sw = -1.0_WP
 !----------------------------------------------------------------
 !  I n p u t   A r g u m e n t s
 !----------------------------------------------------------------
@@ -148,6 +151,37 @@
       und_cst     = matparam%uparam(12)  ! ultimate displacement in normal direction (und)
       utd_cst     = matparam%uparam(13)  ! ultimate displacement in tangential direction (utd)
       alpha       = matparam%uparam(14)  ! exponential law parameter (alpha)
+      ! 2026-10-05 (twgoode): phase switch.  From TIME >= RAD_COH_TSW use RAD_COH_TN2,
+      ! RAD_COH_TT2, RAD_COH_GIC2, RAD_COH_GIIC2 (unset or <= 0: card value) and recompute
+      ! the pure-mode displacements (linear shape).  Off when RAD_COH_TSW is unset.
+      if (tsw_sw < -1.5_WP) then
+        tsw_sw = -1.0_WP
+        call get_environment_variable('RAD_COH_TSW', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) tsw_sw
+        call get_environment_variable('RAD_COH_TN2', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) tn_sw
+        call get_environment_variable('RAD_COH_TT2', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) tt_sw
+        call get_environment_variable('RAD_COH_GIC2', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) gic_sw
+        call get_environment_variable('RAD_COH_GIIC2', envbuf, envlen, envstat)
+        if (envstat == 0 .and. envlen > 0) read(envbuf(1:envlen),*) giic_sw
+        if (tsw_sw >= zero) then
+          write(iout,'(A,1PE12.4,A,4(1PE12.4))') '  LAW117 patch: phase switch at t =', tsw_sw, &
+            '  TN2 TT2 GIC2 GIIC2 =', tn_sw, tt_sw, gic_sw, giic_sw
+          if (ievoshap /= 1) write(iout,'(A)') '  LAW117 patch: phase switch needs ievoshap = 1; NOT applied'
+        endif
+      endif
+      if (tsw_sw >= zero .and. time >= tsw_sw .and. ievoshap == 1) then
+        if (tn_sw > zero)   t_n  = tn_sw
+        if (tt_sw > zero)   t_s  = tt_sw
+        if (gic_sw > zero)  gic  = gic_sw
+        if (giic_sw > zero) giic = giic_sw
+        delta0n_cst = t_n / e_elas_n
+        delta0s_cst = t_s / e_elas_s
+        und_cst     = two * gic  / t_n
+        utd_cst     = two * giic / t_s
+      endif
       !< Compute some constants
       stf         = e_elas_n + e_elas_s
       exp_alpha   = exp(-alpha)
