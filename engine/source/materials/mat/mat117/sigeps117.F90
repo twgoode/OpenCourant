@@ -15,6 +15,13 @@
 !Copyright>        along with this program.  If not, see <https://www.gnu.org/licenses/>.
 !Copyright>
 !Copyright>
+!Copyright>        OpenCourant
+!Copyright>        Copyright (C) 2026 OpenCourant contributors
+!Copyright>
+!Copyright>        Modified by the OpenCourant project, 2026.
+!Copyright>        Modifications are licensed under the GNU Affero General Public
+!Copyright>        License, version 3 or (at your option) any later version.
+!Copyright>
 !Copyright>        This file is part of OpenCourant, a fork of OpenRadioss.
 !Copyright>        See COPYRIGHT.md at the root of the repository for the full
 !Copyright>        copyright and attribution statement.
@@ -327,7 +334,11 @@
         dmg(1:nel) = min(dmg(1:nel), one)        ! saturated at 1 by definition
         ! Deactivate EF (Displament Criterion)
         do i = 1, nel
-          if (offl(i) == one.and.epsmmax(i) > deltafmax(i)) then
+        ! 2026-09-28 (twgoode): Idel > 4 (more than the 4 IPs of TYPE43) keeps
+        ! failed points alive: dmg saturates at 1 (zero tension/shear, full
+        ! compression stiffness, isym = 0) and the element is never deleted
+        ! (suser43.F hard-codes the element threshold to 4 failed IPs).
+          if (nfail <= 4 .and. offl(i) == one.and.epsmmax(i) > deltafmax(i)) then
             nindxf = nindxf+1 ! count
             indxf(nindxf) = i
             offl(i) = zero
@@ -367,7 +378,11 @@
         dmg(1:nel) = max(dmg(1:nel), dam(1:nel))
         dmg(1:nel) = min(dmg(1:nel), one)   
         do i = 1, nel
-          if (offl(i) == one .and. (gtot(i).ge.gc(i).or.dmg(i).ge.one)) then
+        ! 2026-09-28 (twgoode): Idel > 4 (more than the 4 IPs of TYPE43) keeps
+        ! failed points alive: dmg saturates at 1 (zero tension/shear, full
+        ! compression stiffness, isym = 0) and the element is never deleted
+        ! (suser43.F hard-codes the element threshold to 4 failed IPs).
+          if (nfail <= 4 .and. offl(i) == one .and. (gtot(i).ge.gc(i).or.dmg(i).ge.one)) then
             nindxf = nindxf + 1
             indxf(nindxf) = i
             offl(i) = zero
